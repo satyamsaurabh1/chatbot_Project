@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Mortgage Calculator Chatbot</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <!-- Lottie -->
+  <script src="https://unpkg.com/@lottiefiles/lottie-player@latest/dist/lottie-player.js"></script>
+
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: linear-gradient(270deg, #00c9ff, #92fe9d, #1e3c72, #2a5298);
+      background-size: 800% 800%;
+      animation: gradientBG 20s ease infinite;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 30px 15px;
+      color: white;
+    }
+
+    @keyframes gradientBG {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+
+    h1 {
+      margin-bottom: 20px;
+    }
+
+    #chatbox {
+      width: 100%;
+      max-width: 850px;
+      height: 500px;
+      background: rgba(255,255,255,0.2);
+      backdrop-filter: blur(12px);
+      border-radius: 20px;
+      padding: 20px;
+      overflow-y: auto;
+    }
+
+    .bot, .user {
+      max-width: 80%;
+      padding: 14px 18px;
+      margin: 12px 0;
+      border-radius: 16px;
+      animation: fadeIn 0.3s ease;
+    }
+
+    .bot {
+      background: #e3f2fd;
+      color: #0d47a1;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .user {
+      background: #d1c4e9;
+      color: #4a148c;
+      margin-left: auto;
+      text-align: right;
+    }
+
+    .input-area {
+      margin-top: 15px;
+      width: 100%;
+      max-width: 850px;
+      display: flex;
+      gap: 10px;
+    }
+
+    input {
+      flex: 1;
+      padding: 14px;
+      border-radius: 10px;
+      border: none;
+      outline: none;
+      font-size: 16px;
+    }
+
+    button {
+      padding: 14px 20px;
+      border: none;
+      border-radius: 10px;
+      background: #4caf50;
+      color: white;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: #388e3c;
+    }
+
+    .typing {
+      font-style: italic;
+      font-size: 14px;
+      color: #fff3e0;
+    }
+
+    .robo {
+      width: 45px;
+      height: 45px;
+    }
+
+    .chart-card {
+      margin-top: 25px;
+      width: 360px;
+      padding: 20px;
+      border-radius: 20px;
+      background: rgba(255,255,255,0.18);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 12px 30px rgba(0,0,0,0.25);
+      text-align: center;
+      display: none;
+    }
+
+    .chart-wrapper {
+      width: 260px;
+      height: 260px;
+      margin: auto;
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 100% !important;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+  </style>
+</head>
+
+<body>
+
+<h1>🤖 Mortgage Calculator Chatbot</h1>
+
+<div id="chatbox">
+  <div class="bot">
+    <lottie-player
+      src="https://lottie.host/f12ad5f3-5011-4ae0-9cde-3811cf953fb2/dfiC8Dd79J.json"
+      background="transparent"
+      speed="1"
+      loop autoplay
+      class="robo">
+    </lottie-player>
+    Hello! Enter the loan amount (₹).
+  </div>
+</div>
+
+<div class="input-area">
+  <input id="userInput" placeholder="Type here..." />
+  <button onclick="handleUserInput()">Send</button>
+</div>
+
+<div class="chart-card" id="chartCard">
+  <h3>Loan Breakdown</h3>
+  <div class="chart-wrapper">
+    <canvas id="interestChart"></canvas>
+  </div>
+</div>
+
+<script>
+  let step = 0, loan = 0, rate = 0, years = 0;
+  let type = "si";
+  let chart = null;
+
+  function appendMessage(sender, msg, animated = false) {
+    const chatbox = document.getElementById("chatbox");
+    const div = document.createElement("div");
+    div.className = sender;
+
+    if (sender === "bot" && animated) {
+      div.innerHTML = `
+        <lottie-player
+          src="https://lottie.host/f12ad5f3-5011-4ae0-9cde-3811cf953fb2/dfiC8Dd79J.json"
+          background="transparent"
+          speed="1"
+          loop autoplay
+          class="robo">
+        </lottie-player>
+        ${msg}`;
+    } else {
+      div.innerHTML = msg;
+    }
+
+    chatbox.appendChild(div);
+    chatbox.scrollTop = chatbox.scrollHeight;
+  }
+
+  function showTyping() {
+    const chatbox = document.getElementById("chatbox");
+    const div = document.createElement("div");
+    div.className = "typing";
+    div.innerText = "Bot is typing...";
+    chatbox.appendChild(div);
+    chatbox.scrollTop = chatbox.scrollHeight;
+    return div;
+  }
+
+  function handleUserInput() {
+    const inputField = document.getElementById("userInput");
+    const input = inputField.value.trim();
+    if (!input) return;
+
+    appendMessage("user", input);
+    inputField.value = "";
+
+    const typing = showTyping();
+
+    setTimeout(() => {
+      typing.remove();
+
+      if (step === 0) {
+        loan = parseFloat(input);
+        if (isNaN(loan) || loan <= 0) {
+          appendMessage("bot", "❌ Please enter a valid loan amount.", true);
+          return;
+        }
+        appendMessage("bot", `💰 Loan Amount: ₹${loan}<br>Choose interest type: <b>SI</b> or <b>CI</b>`, true);
+        step++;
+      }
+
+      else if (step === 1) {
+        if (!["si","ci"].includes(input.toLowerCase())) {
+          appendMessage("bot", "❌ Type SI or CI only.", true);
+          return;
+        }
+        type = input.toLowerCase();
+        appendMessage("bot", "📈 Enter annual interest rate (%)", true);
+        step++;
+      }
+
+      else if (step === 2) {
+        rate = parseFloat(input);
+        if (isNaN(rate) || rate <= 0) {
+          appendMessage("bot", "❌ Invalid interest rate.", true);
+          return;
+        }
+        appendMessage("bot", "📅 Enter loan duration (years)", true);
+        step++;
+      }
+
+      else {
+        years = parseInt(input);
+        if (isNaN(years) || years <= 0) {
+          appendMessage("bot", "❌ Invalid number of years.", true);
+          return;
+        }
+
+        let interest, total;
+        if (type === "si") {
+          interest = (loan * rate * years) / 100;
+          total = loan + interest;
+        } else {
+          total = loan * Math.pow(1 + rate / 100, years);
+          interest = total - loan;
+        }
+
+        appendMessage(
+          "bot",
+          `📊 Interest: <b>₹${interest.toFixed(2)}</b><br>💵 Total Payment: <b>₹${total.toFixed(2)}</b>`,
+          true
+        );
+
+        drawChart(loan, interest);
+        document.getElementById("chartCard").style.display = "block";
+        step = 0;
+      }
+    }, 900);
+  }
+
+  function drawChart(principal, interest) {
+    const ctx = document.getElementById("interestChart");
+    if (chart) chart.destroy();
+
+    chart = new Chart(ctx, {
+      type: "doughnut",
+      data: {
+        labels: ["Principal", "Interest"],
+        datasets: [{
+          data: [principal, interest],
+          backgroundColor: ["#42a5f5", "#ff6b6b"],
+          hoverOffset: 14
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        cutout: "65%",
+        plugins: {
+          legend: {
+            position: "bottom",
+            labels: { color: "#ffffff" }
+          }
+        }
+      }
+    });
+  }
+
+  document.getElementById("userInput").addEventListener("keydown", e => {
+    if (e.key === "Enter") handleUserInput();
+  });
+</script>
+
+</body>
+</html>
